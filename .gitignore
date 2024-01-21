@@ -1,0 +1,6 @@
+*.fasl
+TAGS
+compilation-timestamp
+make-tags
+# emacs backup files:
+*~
