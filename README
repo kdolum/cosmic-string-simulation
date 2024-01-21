@@ -1,0 +1,88 @@
+Cosmic string network simulation and gravitational backreaction code
+from the Tufts Institute of Cosmology.
+
+Major developers: Ken Olum, J. J. Blanco-Pillado, Ben Shaer, Jeremy
+Wachter, Asier Lopez-Eiguren.
+
+With contributions by: Shaojiang Wang, Colette Kaya, Vishnu Gade,
+Kirthi Sivakumar.
+
+The original concept was due to Alex Vilenkin, and the original
+implementation of the concept was done by Vitaly Vanchurin.
+
+INSTALLATION
+
+You need a lisp implementation.  Many things in the code expect you to
+have SBCL, so install it from sbcl.org.
+
+You need to install the "quicklisp" system, which is needed in
+particular for gsll, the Gnu scientific library in lisp.  To get it,
+download the file https://beta.quicklisp.org/quicklisp.lisp into your
+home directory.  Then in your lisp, say (load "~/quicklisp") and then
+(quicklisp-quickstart:install).  Each user of this package has to do
+this, but only once each.
+
+You will need access to gsl (the Gnu scientific library), libffi,
+gnuplot, and ffmpeg (if you want to make movies), so install these
+packages.
+
+CONFIGURATION
+
+To configure the system for your site, find the code in 
+(defparameter server ...) in definitions.lisp and add a conditional to
+identify your site and return some keyword identifying it.  Then look
+for all uses of :tufts in definitions.lisp and submit.lisp and add
+additional clauses for your site.  For long time, Tufts has been using
+the slurm batch manager.  The code ran once under lsf and under
+condor. If you use one of those, you should try selecting this old
+code and seeing if it works.  But it might need modification.  If you
+have yet some other match manager, your will have to write some
+functions to interface to it.
+
+RUNNING SIMULATIONS
+
+To load the system, connect to the directory with the lisp files and in
+your lisp say
+
+(load "load")
+
+To run a small simulation in your lisp, say something like
+(do-vv :size 20)
+
+This will put the output files in a directory "test" under your
+current directory.  After the first time you also need the option
+:OVERWRITE T, or it will complain that that output file already
+exists.
+
+To run a real simulation, you need the manager.  For example,
+(manager "test" t 70
+   '(do-vv :size 100.0 :log t :split-factor 5))
+
+The arguments to MANAGER mean the following:
+
+First is the directory to keep the temporary files and write the output.
+It is relative to variable batch-root-directory, which you should
+configure properly for your site.
+
+Second is the duration of the run in internal time.  The units are
+roughly units of the initial string spacing.  The symbol T means to
+default the time from the size of the run.
+
+Third is the maximum number of worker processes to allow at once.
+
+Last comes the (quoted) form that is to be evaluated in each worker.  It
+will be amended with a :job-number argument to say which job the worker
+is to do.
+
+The SIZE argument to DO-VV gives the size of the box (really the minimum
+distance between identifying points under periodic boundary conditions,
+because the box is not rectangular).  SPLIT-FACTOR gives the factor by
+which to divide the size in each linear direction to split up the entire
+work into jobs.  Thus in this case there will be 125 workers in
+each layer. (See the picture in our paper in Journal of Computational
+Physics to understand what layers are.)
+
+There are many other possible arguments to DO-VV.  They are defined by
+the forms DEFINE-SIMULATE-ARGUMENT and DEFINE-SIMULATE-VARIABLE, which
+you can look for in the source.  In the example above, LOG means to
+write a log of loops that were created.
