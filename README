@@ -86,3 +86,16 @@ There are many other possible arguments to DO-VV.  They are defined by
 the forms DEFINE-SIMULATE-ARGUMENT and DEFINE-SIMULATE-VARIABLE, which
 you can look for in the source.  In the example above, LOG means to
 write a log of loops that were created.
+
+UPGRADING
+
+If you install a new version of sbcl, your compiled files will not work.
+So recompile everything by saying (load "reload").
+
+Sometimes new versions of sbcl require new versions of gsll.  It would
+probably work to say (ql:update-dist "quicklisp") to get a new
+version.  However, when I did this I interrupted it and got into some
+inconsistent state.  So I started completely over by deleting my
+~/quiclklisp directory and reinstalling as above, starting
+with (load "~/quicklisp").
+
