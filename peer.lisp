@@ -159,12 +159,15 @@
 	   (fd (socket-file-descriptor *peer-socket*)))
       ;;Using select here not only allows us to have a timeout but also protects us from problems when
       ;;you type ^C inside recvfrom
-      (let ((nset
-	     (account-time :select
-	       (sb-unix:unix-select (1+ fd) (ash 1 fd) 0 0 seconds microseconds)))) ;Wait for packet
-	(and nset			;If interrupted, it can return NIL
-	     (plusp nset)		;If none, return NIL
-	     (peer-receive-1))))))
+      (with-alien ((fds (struct sb-unix:fd-set)))
+	(sb-unix:fd-zero fds)
+	(sb-unix:fd-set fd fds)
+	(let ((nset
+	       (account-time :select
+		 (sb-unix:unix-fast-select (1+ fd) (addr fds) nil nil seconds microseconds)))) ;Wait for packet
+	  (and nset			;If interrupted, it can return NIL
+	       (plusp nset)		;If none, return NIL
+	       (peer-receive-1)))))))
 
 (define-timer :receive-1)
 
