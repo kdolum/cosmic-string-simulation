@@ -1265,10 +1265,12 @@
   ;;Length in layout includes slots and layout object itself.
   ;;Most add one for header, then roundup to multiple of 2 words
   (* 16 (ceiling (1+ 
-		  (#-sbcl2 sb-kernel:layout-length #+sbcl2 sb-kernel:wrapper-length
-			   (#-sbcl2 sb-kernel:classoid-layout #+sbcl2 sb-kernel:classoid-wrapper
+		  (#-sbcl-wrappers sb-kernel:layout-length #+sbcl-wrappers sb-kernel:wrapper-length
+			   (#-sbcl-wrappers sb-kernel:classoid-layout #+sbcl-wrappers sb-kernel:classoid-wrapper
 				    (sb-kernel:find-classoid type))))
 		 2)))
+
+
 
 
 ;;Describe calendar memory usage and return total
