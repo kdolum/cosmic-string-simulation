@@ -170,7 +170,8 @@
     (load "load")			;Make sure files compiled
     (ensure-directories-exist (format nil "~A/" source)) ;Create source directory
     (format t "~&Copying files...") (force-output)
-    (do-run-program "csh" :args (list "-c" (format nil "cp --preserve=timestamps *.lisp *.fasl *.dat rsync.conf ~A" source)))
+    ;;If using rsync, should also include rsync.conf
+    (do-run-program "csh" :args (list "-c" (format nil "cp --preserve=timestamps *.lisp *.fasl *.dat ~A" source)))
     (do-run-program "csh" :args (list "-c" (format nil "chmod g+w ~A/*" source))) ;Make all group-writable
     (format t "done~%")))
 
@@ -443,7 +444,7 @@
 		    (manager-top-level directory group jobs split-factor max-workers :restore restore :reproduce reproduce :combine combine)
 		    )))))))))
 
-;;Run a shell command on a node
+;;Run a shell command on a node.    Using srun only works if you are not already in a batch job though.
 (defun run-on-node (host command &rest do-run-program-args)
 ;;  (format t "~A: " host) (force-output)
   (if (eq server :tufts)
@@ -455,44 +456,47 @@
 (defun do-nodes (command &optional (nodes all-lsf-nodes))
   (let* ((count (length nodes))
 	 (processes (make-array count :initial-element nil))
-	 (max-fd 0)
-	 (read-fds 0))
-    (unwind-protect
-	(progn
-	  (loop for node in nodes	;Start a ssh process to each node
-		for index from 0
-		for process = (run-on-node node command :wait nil :input nil :output :stream :error-too t)
-		do (setf (aref processes index) process)) ;Store in table
+	 max-fd)
+     (with-alien ((fds (struct sb-unix:fd-set)))
+	(unwind-protect
+	    (progn
+	      (loop for node in nodes	;Start ssh/srun process to each node
+		    for index from 0
+		    for process = (run-on-node node command :wait nil :input nil :output :stream :error-too t)
+		    do (setf (aref processes index) process)) ;Store in table
+	      (loop					      ;Loop getting output from processes
+	       (sb-unix:fd-zero fds)
+	       (setq max-fd -1)
+	       (loop for index below count
+		     for process = (aref processes index)
+		     when process	;Still there?
+		     do (let ((fd (sb-sys:fd-stream-fd (process-output process))))
+			  (sb-unix:fd-set fd fds) ;Set bits in fds corresponding to file descriptors
+			  (when (> fd max-fd)
+			    (setq max-fd fd))))
+	       (when (minusp max-fd) (return)) ;All are done
+	       (sb-unix:unix-fast-select (1+ max-fd) (addr fds) nil nil 0 0) ;Wait for some stream to be readable
+	       (loop for index below count
+		     for node in nodes
+		     for process = (aref processes index)
+		     when process
+		     do (let* ((stream (process-output process))
+			       (fd (sb-sys:fd-stream-fd stream)))
+			  (when (sb-unix:fd-isset fd fds) ;Something to say?
+			    (loop for first = t then nil
+				  for char = (read-char-no-hang stream nil t)
+				  while char		 ;Exit if nothing available
+				  when (eq char t)	 ;EOF?
+				  do (process-close process) ;Done with process
+				  (setf (aref processes index) nil)
+				  (loop-finish)
+				  when first do (format t "~&~A: " node)
+				  do (write-char char)))))))
 	  (loop for index below count
-		for fd = (sb-sys:fd-stream-fd (process-output (aref processes index)))
-		do (setf (logbitp fd read-fds) t) ;Set bits in read-fds corresponding to file descriptors
-		when (> fd max-fd)
-		do (setq max-fd fd))
-	  (loop while (plusp read-fds)		;Loop as long as there are processes to wait for
-		do
-	   (multiple-value-bind (nfds readable-fds)
-	       (sb-unix:unix-select (1+ max-fd) read-fds 0 0 nil) ;Wait for some stream to be readable
-	     (declare (ignore nfds))
-	     (loop for index below count
-		   for node in nodes
-		   for process = (aref processes index)
-		   for stream = (process-output process)
-		   for fd = (sb-sys:fd-stream-fd stream)
-		   when (logbitp fd readable-fds) ;Something to say?
-		   do (loop for first = t then nil
-			    for char = (read-char-no-hang stream nil t)
-			    while char	;Exit if nothing available
-			    when (eq char t) ;EOF?
-			    do (process-close process) ;Done with process
-			       (setf (logbitp fd read-fds) nil)
-			       (loop-finish)
-			    when first do (format t "~&~A: " node)
-			    do (write-char char))))))
-      (loop for index below count
-	    for process = (aref processes index)
-	    when (and process (process-alive-p process)) ;process started, and still alive
-	    do (process-kill process sb-unix:sigterm)) ;Kill it
-      )))
+		for process = (aref processes index)
+		when (and process (process-alive-p process)) ;process started, and still alive
+		do (process-kill process sb-unix:sigterm))   ;Kill it
+	  ))))
 		     
 
 
