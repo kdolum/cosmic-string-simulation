@@ -65,7 +65,9 @@
 
 ;;Some internals depend on sbcl version
 (when (char> (char (lisp-implementation-version) 0) #\1)
-  (pushnew :sbcl2 *features*))
+  (pushnew :sbcl2 *features*)
+  (when (find-symbol "CLASSOID-WRAPPER" "SB-KERNEL")
+    (pushnew :sbcl-wrappers *features*)))
 
 (setq *compile-print* nil)		;Don't tell about each fn compiled
 (setq *load-verbose* t)			;Do tell about files loaded
