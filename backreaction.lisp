@@ -724,10 +724,10 @@
 	nconc (make-list count :initial-element hat) into new-hats ;Copies of hat
 	nconc (make-list count :initial-element (/ dsigma count)) into new-dsigmas ;divide sigma
 	finally
-	(setq new-hats (coerce new-hats 'vector)
-	      new-dsigmas (coerce new-dsigmas '(vector double-float)))
-	(format t "Split ~D hats into ~D~%" (length hats) (length new-hats))
-	(return (values new-hats new-dsigmas))))
+	(let ((new-hats-1 (coerce new-hats 'vector))
+	      (new-dsigmas-1 (coerce new-dsigmas '(vector double-float))))
+	  (format t "Split ~D hats into ~D~%" (length hats) (length new-hats-1))
+	  (return (values new-hats-1 new-dsigmas-1)))))
 
 ;;Split each into N
 (defun split-hats-n (hats dsigmas n)
