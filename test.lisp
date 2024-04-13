@@ -622,10 +622,11 @@
 ;	(format t "BHs created by other job")))
   (let* ((end-local (and end (local-time end))) ;Convert to local
 	 ;;Local ending time of job.  Fudge factor here is to make this go after the successor output event.
-	 (job-end (+ (job-end-t) fudge-coordinates)))
+	 (job-end (if size (+ (job-end-t) fudge-coordinates)
+		    end-local)))
     (when (> *initial-time* job-end)
       (error "Initial time ~S is after end of job volume ~S" *initial-time* job-end))
-    (unless (and end-local (<= end-local job-end)) ;default or restrict end to end of cube
+    (unless (and end-local (< end-local job-end)) ;default or restrict end to end of cube
       (setq end-local job-end))
     (let* ((our-end (global-time end-local)) ;Global ending time of this job
 	   (dump-schedule (dump-schedule start our-end ;Dumps to be done by this job
@@ -654,7 +655,8 @@
 	(my-bhs)
 	(clean-mybhs))
       ;;Regardless of how long we will run now, put in the event to communicate strings to successors
-      (main-calendar-add (job-end-t) (make-successor-output (job-end-t)))
+      (when size
+	(main-calendar-add (job-end-t) (make-successor-output (job-end-t))))
       ;;Put in all events for dumping
       (loop with created = nil		;Create directory first time it is needed
 	    with step = 0		;Count actual dumps
