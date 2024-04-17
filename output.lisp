@@ -364,6 +364,7 @@
 ;;Decide whether to output a loop or a string beginning with VV-junction or :deleted
 (defun output-loop-p (diamond)
   (or (null *dump-time*) ;If not dumping, always output
+      (null *size*)	 ;If infinite volume, always output
       ;;Doing dump.  We dump this diamond unless valid part of the diamond definitely starts in the future
       ;;of the dump
       (let ((local-dump-time (local-time *dump-time*)))

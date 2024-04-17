@@ -48,9 +48,10 @@
 	 (setup-geometry :total-size total-size :split-factor split-factor :ijkl ijkl :job-number job-number
 			 :ijkl-origin ijkl-origin))
 	(t
-	 (setq *job-number* (or job-number 0)
+	 (setf *job-number* (or job-number 0)
 	       *global-location* zero-4vector
-	       *total-size* nil)))	;Say infinite volume
+	       *total-size* nil		;Say infinite volume
+	       (aref *successor-offsets* dump-destination) zero-4vector)))
   ;;Job starting time.  No earlier than beginning of cube.
   (let ((job-start (global-time (job-start-t))))
     (unless (and start (>= start job-start))

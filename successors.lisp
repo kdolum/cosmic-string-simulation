@@ -28,7 +28,11 @@
 ;;If left-junction is given and isn't :deleted, start there.  Otherwise start at left of diamond.
 ;;Similarly for right-junction.  We don't include the left and right junctions themselves.
 (defun diamond-destinations (diamond left-junction right-junction)
-   (mirror-images
+  (unless *size*			;infinite volume dump
+    (if *dump-time*
+	(return-from diamond-destinations (list dump-destination))
+      (error "writing to successors in infinite volume case doesn't make sense")))
+  (mirror-images
    (unless (rejoining-junction-p left-junction) (setq left-junction nil))) ;Other types of junction are not interesting to us
   (let* ((left (diamond-left diamond))	;Left and right unless modified by junctions
 	 (right (diamond-right diamond))
