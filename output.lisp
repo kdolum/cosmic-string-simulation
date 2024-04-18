@@ -1811,6 +1811,7 @@
 
 ;;Write out information about run
 (defun write-run-info-file (&key start end split-factor total-size dump-times length-times bh-size bh-number bh-times)
+  (ensure-directories-exist (run-info-file))
   (with-open-file (stream (run-info-file) :direction :output )
     (prin1 (make-run-info :era *era*
 			  :total-size total-size

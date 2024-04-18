@@ -590,7 +590,8 @@
   (if *dump-diamonds*
       (format t "Dumping Diamonds~%")
     (format t "NOT Dumping Diamonds~%"))
-  (when *simulate-just-write-info*
+  ;;Write-in profile in a separate call under the manager or for infinite volume case
+  (when (or *simulate-just-write-info* (null size))
     ;;Use supplied end or last time covered by overall run.  This is before the actual ending time of the last layer.
     ;;We only come here in the manager, so this can be figured out.
     (let* ((overall-end (or end (+ start (jobs-duration size split-factor *manager-jobs*))))
@@ -599,12 +600,12 @@
 					 length-times length-start length-interval length-end))
 	   (length-times (mapcar #'car dump-schedule)) ;Times when length will be dumped, i.e., any dump
 	   (full-dump-times (mapcar #'car (remove-if #'second dump-schedule)))) ;Times of actual dumps
-      (return-from simulate-1
-	(write-run-info-file :start start
-			     :end overall-end
-			     :dump-times full-dump-times :length-times length-times :bh-times bh-times
-			     :split-factor split-factor :total-size size
-			     :bh-size bh-size :bh-number bh-number))))
+      (write-run-info-file :start start
+			   :end overall-end
+			   :dump-times full-dump-times :length-times length-times :bh-times bh-times
+			   :split-factor split-factor :total-size size
+			   :bh-size bh-size :bh-number bh-number)
+      (when *simulate-just-write-info* (return-from simulate-1 t))))
   (when *job-number*
     (format t "~&********** JOB ~D **********~%" *job-number*))
   (cond (size				;Size given: normal case.  It is the periodicity distance.
