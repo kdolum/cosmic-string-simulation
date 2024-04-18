@@ -104,17 +104,20 @@
 	    (t
 	     (setq time (nth step dump-times))))
       (values
-       (loop for job from 0
-	     for start = (global-job-start total-size time-offset job)
-	     for end = (global-job-end total-size time-offset job)
-	     until (> start time)	;Stop when we reach a job that started after the dump time
-	     when (< time end)		;Did job run through the time?
-	     collect (dump-file job
-				(if (run-info-dump-interval info) ;Old format.  Step numbers are per-job
-				    ;;Decreased by any dumps that job didn't do at all
-				    (- step (loop for time in dump-times
-						  count (<= time (- start fudge-global-coordinates))))
-				  step)))
+       (if total-size
+	   (loop for job from 0
+		 for start = (global-job-start total-size time-offset job)
+		 for end = (global-job-end total-size time-offset job)
+		 until (> start time)	;Stop when we reach a job that started after the dump time
+		 when (< time end)	;Did job run through the time?
+		 collect (dump-file job
+				    (if (run-info-dump-interval info) ;Old format.  Step numbers are per-job
+					;;Decreased by any dumps that job didn't do at all
+					(- step (loop for time in dump-times
+						      count (<= time (- start fudge-global-coordinates))))
+				      step)))
+
+	 (list (dump-file 0 step)))		;Infinite volume: only one job
        info time)))
   
 ;;Read and reconnect all dump files for the given time or dump step
