@@ -846,6 +846,7 @@
 	with max-v-step
 	with ejected-with-loss = nil	;Amount of loss at time of ejection
 	with major-loss = nil
+	with ending-time = 0.0
 	initially (multiple-value-bind (a-hats a-dsigmas b-hats) (read-hats-dsigmas (backreaction-dump-filename directory 0))
 		    (declare (ignore a-dsigmas))
 		    (format t "N_A = ~D, N_B = ~D~%" (length a-hats) (length b-hats)))
@@ -891,13 +892,16 @@
 	sum (backreaction-info-real-time-backreaction info) into real-time-backreaction
 	sum (backreaction-info-real-time-simulation info) into real-time-simulation
 	sum (backreaction-info-real-time-total info) into real-time-total
-	do (setq last-length (backreaction-info-length info))
+	sum (backreaction-info-derivative-calls info) into derivative-calls
+	do (setq last-length (backreaction-info-length info)
+		 ending-time (backreaction-info-time info))
 	do (mirror-images (setq last-a-kinks (backreaction-info-a-kinks info)))
 	finally
 	(when max-v
 	  (format t "Fastest speed after simulation ~S at step ~D~%" max-v max-v-step))
 	(format t "~D intersection~:P (~D rejoining~:P) in ~D batches.~%"
 		intersections rejoinings simulations-with-intersections)
+	(format t "Evolved to NGmu ~F~%" ending-time)
 	(format t "Initial length ~S.  Fractions lost:~%  backreaction: ~S~%  simulation: ~S~%  rest frame after simulation: ~S~%"
 		initial-length
 		(/ length-lost-backreaction initial-length)
@@ -910,7 +914,8 @@
 		(format-seconds (floor real-time-simulation))
 		(format-seconds (floor (- real-time-total real-time-simulation real-time-backreaction)))
 		)
-	finally (return (values initial-length intersections major-loss max-v ejected-with-loss))))
+	(format t "Derivative calls: ~D~%" derivative-calls)
+	(return (values initial-length intersections major-loss max-v ejected-with-loss))))
 
 
 ;;List of pre- and post-simulation files and next dump
@@ -1435,7 +1440,7 @@
     Jacobian))
 
 ;;Compute gravitational 4-momentum spectrum.  See also compute-radiated-energy
-(defun backreaction-compute-radiation (directory &key (start 0) end (step 1)
+(defun backreaction-compute-radiation (directory &key (start 0) end (step 1) steps
 						 (direct-n (expt 2 14)) (total-n (expt 2 40)) (bin-size 2.0)
 						 (split-levels 0) submit)
    (cond (submit
@@ -1444,40 +1449,47 @@
 		     "radiation-"
 		     batch-flags
 		     `(backreaction-compute-radiation-1
-		       nil ,start ,end ,step ,direct-n ,total-n ,bin-size ,split-levels)))
-	 (t (backreaction-compute-radiation-1 directory start end step direct-n total-n bin-size split-levels))))
+		       nil ,start ,end ,step ',steps ,direct-n ,total-n ,bin-size ,split-levels)))
+	 (t (backreaction-compute-radiation-1 directory start end step steps direct-n total-n bin-size split-levels))))
 
-(defun backreaction-compute-radiation-1 (directory start end step direct-n total-n bin-size split-levels)
+;;Compute from START to END in steps of STEP.  Or if STEPS is set, use those steps instead.  If END is not
+;;set, stop when we find a step whose data is not there
+(defun backreaction-compute-radiation-1 (directory start end step steps direct-n total-n bin-size split-levels)
+  (format t "~%Running on host ~A~%~%" (machine-instance))
   (with-group-write-access
    (unless directory			     ;NIL means connected directory
      (setq directory (sb-posix:getcwd)))     ;Using "." causes some trouble with batch job submission
-   (loop with start-time = (get-internal-real-time)
-	 with *backreaction-filename-digits* = (find-backreaction-digits directory)
-	 with initial-length = nil
-	 for this-step from start by step 
-	 until (and end (>= this-step end))
-	 for file = (backreaction-dump-filename directory this-step)
-	 while (probe-file file)
-	 do (format t "Step ~D: " this-step)
-	 do (with-open-file (stream (backreaction-momentum-filename directory this-step)
-				    :direction :output :if-exists :supersede)
-	      (multiple-value-bind (a-hats a-dsigmas b-hats b-dsigmas)
-		  (read-hats-dsigmas file)
-		(mirror-image-let ((a-sigmas (dsigma-to-sigma a-dsigmas)))
-		  (unless initial-length (setq initial-length (total-sigma a-sigmas))) ;First time
-		  (let ((*print-readably* t)) ;Compute and write result for this step
-		    (format stream 
-			    ";;4-momentum computed with split-levels ~D, direct-n ~D, total-n ~D, bin-size ~S~%"
-			    split-levels direct-n total-n bin-size)
-		    (format stream "~S~%"
-			    (total-gravitational-4vector-spectrum a-hats a-sigmas b-hats b-sigmas
-								  direct-n :total-n total-n
-								  :bin-size bin-size :split-levels split-levels))
-		    ))))
-	 finally
-	 (format t "~&Computation took ~A."
-		 (format-seconds (floor (- (get-internal-real-time) start-time) internal-time-units-per-second)))
-	 )))
+   (let ((start-time (get-internal-real-time))
+	 (*backreaction-filename-digits* (find-backreaction-digits directory)))
+     (if steps
+	 (loop for this-step in steps
+	       do (backreaction-compute-radiation-2 directory this-step direct-n total-n bin-size split-levels))
+       (loop for this-step from start by step
+	     until (and end (>= this-step end)) ;Stop if end reached
+	     while (or end	;If end not set
+		       (probe-file (backreaction-dump-filename directory this-step))) ;Go until end of run
+	     do (backreaction-compute-radiation-2 directory this-step direct-n total-n bin-size split-levels)))
+     (format t "~&Computation took ~A."
+	     (format-seconds (floor (- (get-internal-real-time) start-time) internal-time-units-per-second)))
+     )))
+
+(defun backreaction-compute-radiation-2 (directory step direct-n total-n bin-size split-levels)
+  (format t "Step ~D: " step)
+  (with-open-file (stream (backreaction-momentum-filename directory step)
+			  :direction :output :if-exists :supersede)
+    (multiple-value-bind (a-hats a-dsigmas b-hats b-dsigmas)
+	(read-hats-dsigmas (backreaction-dump-filename directory step))
+      (mirror-image-let ((a-sigmas (dsigma-to-sigma a-dsigmas)))
+	(let ((*print-readably* t))	;Compute and write result for this step
+	  (format stream 
+		  ";;4-momentum computed with split-levels ~D, direct-n ~D, total-n ~D, bin-size ~S~@[, bpd-split ~D~]~%"
+		  split-levels direct-n total-n bin-size (and (> *bpd-split-factor* 1) *bpd-split-factor*))
+	  (format stream "~S~%"
+		  (total-gravitational-4vector-spectrum a-hats a-sigmas b-hats b-sigmas
+							direct-n :total-n total-n
+							:bin-size bin-size :split-levels split-levels))
+	  )))))
+
 
 ;;Plot previously computed energy, momentum, and rocket fraction over time.
 ;;If DIVIDE-SPECTRUM given it should be a list of in numbers and we show also the spectrum divided at
@@ -1910,3 +1922,4 @@
 			  (and (numberp significance) (< significance 15)))
 		 do (format t "~D step ~D: ~A~%" number step significance)
 		 )))
+
