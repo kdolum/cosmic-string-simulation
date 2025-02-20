@@ -262,18 +262,31 @@
 	  (let* ((spectrum (spectrum-from-ij iperp ixy jperp jxy)) ;spectrum through direct-n
 		 (power (bin-gravitational-spectrum spectrum total-n bin-size))) ;Bin low-f data
 	    (when (> total-n direct-n)						 ;Extension?
-	      (let ((iperp-extension (binned-perp-direct a-hats a-sigmas omega direct-bins bins bin-size))
-		    (jperp-extension (binned-perp-direct b-hats b-sigmas omega direct-bins bins bin-size)))
-		;;Extend power spectrum using I and J computed individually from a' and b'
-		;;iperp-extension has the sum of n |I_perp|^2.  To get the average we should divide by
-		;;of the number of harmonics in the bin.  Then we multiply by jperp-extension to get the
-		;;average of n^2 |I_perp|^2 |J_perp|^2.  To get the sum we multiply by the number of harmonics,
-		;;but only once, so we must divide once.
-		(loop for bin from direct-bins below bins
-		      do (setf (aref power bin)
-			       (/ (* 8 pi (* (aref iperp-extension bin) (aref jperp-extension bin)))
-				  (bin-harmonic-count bin-size bin))))))
+	      (extend-gravitational-spectrum power a-hats a-sigmas b-hats b-sigmas omega direct-bins bins bin-size))
 	    power))))))
+
+(defvar *bpd-split-factor* 4)
+
+(defun extend-gravitational-spectrum (power a-hats a-sigmas b-hats b-sigmas omega direct-bins bins bin-size
+					    &optional (split-factor *bpd-split-factor*))
+  ;;Split up bins for better accuracy
+  (let* ((first-bin-split (* direct-bins split-factor))
+	 (bins-split (* bins split-factor))
+	 (bin-size-split (expt bin-size (/ 1 (double-float split-factor))))
+	 (iperp-extension (binned-perp-direct a-hats a-sigmas omega first-bin-split bins-split bin-size-split))
+	 (jperp-extension (binned-perp-direct b-hats b-sigmas omega first-bin-split bins-split bin-size-split)))
+    ;;Extend power spectrum using I and J computed individually from a' and b'
+    ;;iperp-extension has the sum of n |I_perp|^2.  To get the average we should divide by
+    ;;of the number of harmonics in the bin.  Then we multiply by jperp-extension to get the
+    ;;average of n^2 |I_perp|^2 |J_perp|^2.  To get the sum we multiply by the number of harmonics,
+    ;;but only once, so we must divide once.
+    (loop for bin from direct-bins below bins
+	  do (setf (aref power bin)
+		   (loop for split below split-factor
+			 for sub = (+ (* bin split-factor) split)
+			 ;;Add up results from sub-bins, processed separately
+			 sum (/ (* 8 pi (* (aref iperp-extension sub) (aref jperp-extension sub)))
+				(bin-harmonic-count bin-size-split sub)))))))
 
 (defun test-binned-gravitational-spectrum (a-hats a-sigmas b-hats b-sigmas omega direct-n
 						       &key  (total-n direct-n) (bin-size 2.0))
