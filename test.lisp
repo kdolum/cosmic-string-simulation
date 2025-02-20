@@ -590,7 +590,9 @@
   (if *dump-diamonds*
       (format t "Dumping Diamonds~%")
     (format t "NOT Dumping Diamonds~%"))
-  ;;Write-in profile in a separate call under the manager or for infinite volume case
+  (when overwrite									  ;Overwriting old files?
+    (delete-old-output (not reproduce)))						  ;Delete them.
+  ;;Write info file in a separate call under the manager or for infinite volume case
   (when (or *simulate-just-write-info* (null size))
     ;;Use supplied end or last time covered by overall run.  This is before the actual ending time of the last layer.
     ;;We only come here in the manager, so this can be figured out.
@@ -638,8 +640,6 @@
 				   (if *total-size* (max *last-dump-time* (+ start *total-size*)) *last-dump-time*)
 				 job-end))) ;fall back on the guaranteed number if nothing's set
       (format t "Overall end time for minimum diamond width calculation is ~S~%" *overall-end-time*)
-      (when overwrite									  ;Overwriting old files?
-	(delete-old-output (not reproduce)))						  ;Delete them.
       (ensure-directories-exist (job-filename *output-directory* *job-number* "")) ;Make output directory if needed
       (cond (*random-seed*							   ;Do things differently under manager
 	     (setq *random-state* (make-random-state-from-32 *random-seed*)))
